@@ -1,0 +1,6 @@
+@Graphing.Server_HostAddress = http://localhost:5234
+
+GET {{Graphing.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
