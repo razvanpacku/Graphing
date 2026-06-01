@@ -1,9 +1,8 @@
-import { useNavigate } from "react-router-dom";
+import GraphingCalculator3D from "../Components/GraphingCalculator3D.tsx";
+
 function Home() {
     return (
-        <>
-            This is a test.
-        </>
+        <GraphingCalculator3D />
     );
 }
 

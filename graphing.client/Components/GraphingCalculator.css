@@ -1,0 +1,300 @@
+.graphing-shell {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  color: #182230;
+  background:
+    radial-gradient(circle at top left, rgba(120, 190, 255, 0.24), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(143, 211, 255, 0.16), transparent 30%),
+    linear-gradient(180deg, #f7f9fc 0%, #edf3f8 100%);
+}
+
+.graphing-sidebar {
+  width: min(390px, 100%);
+  flex: 0 0 min(390px, 100%);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(24, 34, 48, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.graphing-sidebar__header {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid rgba(24, 34, 48, 0.08);
+}
+
+.graphing-kicker {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(59, 85, 117, 0.72);
+}
+
+.graphing-sidebar__title {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #132033;
+}
+
+.graphing-sidebar__subtitle {
+  margin: 10px 0 0;
+  max-width: 32ch;
+  color: rgba(42, 58, 79, 0.76);
+}
+
+.graphing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.graphing-actions--history {
+  margin-top: 10px;
+}
+
+.graphing-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  color: #0b1625;
+  background: linear-gradient(135deg, #edf5ff 0%, #c9e8ff 100%);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.graphing-button--ghost {
+  color: #294156;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(24, 34, 48, 0.1);
+}
+
+.graphing-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.graphing-equations {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.equation-card {
+  border-radius: 20px;
+  border: 1px solid rgba(24, 34, 48, 0.1);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 10px 30px rgba(19, 32, 51, 0.09);
+}
+
+.equation-card[open] {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.equation-card > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 14px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.equation-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.equation-summary__title {
+  display: grid;
+  gap: 4px;
+}
+
+.equation-summary__label {
+  font-weight: 700;
+  color: #182230;
+}
+
+.equation-summary__expression {
+  font-family: var(--mono);
+  color: rgba(72, 90, 112, 0.82);
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.equation-summary__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.equation-pill {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: rgba(29, 78, 216, 0.92);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.equation-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(24, 34, 48, 0.18);
+}
+
+.equation-body {
+  padding: 0 14px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.equation-field {
+  display: grid;
+  gap: 6px;
+}
+
+.equation-field span {
+  font-size: 0.8rem;
+  color: rgba(72, 90, 112, 0.84);
+}
+
+.equation-field input,
+.equation-field select,
+.equation-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid rgba(24, 34, 48, 0.12);
+  background: rgba(255, 255, 255, 0.88);
+  color: #182230;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.equation-field textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.equation-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.equation-row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.equation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.equation-error {
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 90, 90, 0.08);
+  border: 1px solid rgba(255, 90, 90, 0.16);
+  color: #b42323;
+  font-size: 0.88rem;
+}
+
+.equation-note {
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(125, 211, 252, 0.16);
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  color: rgba(24, 34, 48, 0.84);
+  font-size: 0.88rem;
+}
+
+.equation-delete {
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 12px;
+  cursor: pointer;
+  color: #8a1f1f;
+  background: rgba(255, 90, 90, 0.1);
+}
+
+.graphing-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.graphing-stage__canvas {
+  position: absolute !important;
+  inset: 0;
+}
+
+.graphing-overlay {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.graphing-overlay__card {
+  pointer-events: none;
+  max-width: 390px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(24, 34, 48, 0.1);
+  backdrop-filter: blur(12px);
+  color: rgba(24, 34, 48, 0.9);
+}
+
+.graphing-overlay__card strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #122033;
+}
+
+@media (max-width: 1024px) {
+  .graphing-shell {
+    flex-direction: column;
+  }
+
+  .graphing-sidebar {
+    width: 100%;
+    flex-basis: auto;
+    max-height: 46svh;
+    border-right: 0;
+    border-bottom: 1px solid rgba(24, 34, 48, 0.08);
+  }
+
+  .graphing-overlay {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    flex-direction: column;
+  }
+
+  .equation-row,
+  .equation-row--three {
+    grid-template-columns: 1fr;
+  }
+}

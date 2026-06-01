@@ -1,0 +1,23 @@
+* {
+	box-sizing: border-box;
+}
+
+.app-shell {
+	height: 100svh;
+	display: flex;
+	flex-direction: column;
+}
+
+.app-navbar {
+	flex: 0 0 56px;
+	height: 56px;
+	border-bottom: 1px solid rgba(24, 34, 48, 0.08);
+	background: rgba(255, 255, 255, 0.82);
+	backdrop-filter: blur(16px);
+}
+
+.app-content {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+}
