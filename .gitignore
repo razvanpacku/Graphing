@@ -386,3 +386,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+Graphing.Server/wwwroot/scenes/*

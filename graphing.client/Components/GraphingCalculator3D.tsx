@@ -1,4 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState } from "react";
+import { useAuthSession } from '../src/features/auth';
+import { clearPersistedSceneContext, saveScene, updateScene, type SaveScenePayload, type SceneSaveResponse, SceneRequestError } from '../src/features/scenes/scenesApi';
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -64,6 +66,30 @@ type GraphSceneSnapshot = {
     camera: CameraState;
 };
 
+type SceneLoadMetadata = {
+    title?: string;
+    description?: string;
+    sceneId?: string | null;
+    thumbnailPath?: string | null;
+};
+
+type SceneToast = {
+    id: string;
+    tone: "success" | "error" | "info";
+    title: string;
+    message: string;
+};
+
+type EditorDraft = {
+    equations: GraphEquation[];
+    camera: CameraState;
+    title: string;
+    description: string;
+    sceneId: string | null;
+    thumbnailPath: string | null;
+    dirty: boolean;
+};
+
 type ThumbnailSnapshot = {
     mimeType: "image/png";
     dataUrl: string;
@@ -73,7 +99,7 @@ type ThumbnailSnapshot = {
 
 export type GraphSceneHandle = {
     captureScene: () => GraphSceneSnapshot;
-    loadScene: (snapshot: GraphSceneSnapshot) => void;
+    loadScene: (snapshot: GraphSceneSnapshot, metadata?: SceneLoadMetadata) => void;
     captureThumbnail: (size?: { width?: number; height?: number }) => Promise<ThumbnailSnapshot>;
 };
 
@@ -88,6 +114,7 @@ const DEFAULT_CAMERA_STATE: CameraState = {
 };
 
 const DEFAULT_EQUATIONS: GraphEquation[] = [];
+const EDITOR_DRAFT_STORAGE_KEY = "graphing.editor.draft.v2";
 
 function createId() {
     return globalThis.crypto?.randomUUID?.() ?? `eq-${Math.random().toString(36).slice(2, 10)}`;
@@ -205,6 +232,52 @@ function normalizeSceneSnapshot(snapshot: GraphSceneSnapshot): GraphSceneSnapsho
         equations: snapshot.equations.map(cloneEquation),
         camera: cloneCameraState(snapshot.camera),
     };
+}
+
+function createEmptyEditorDraft(): EditorDraft {
+    return {
+        equations: DEFAULT_EQUATIONS,
+        camera: DEFAULT_CAMERA_STATE,
+        title: "",
+        description: "",
+        sceneId: null,
+        thumbnailPath: null,
+        dirty: false,
+    };
+}
+
+function readEditorDraft(): EditorDraft {
+    if (typeof window === "undefined") {
+        return createEmptyEditorDraft();
+    }
+
+    const raw = window.localStorage.getItem(EDITOR_DRAFT_STORAGE_KEY);
+    if (!raw) {
+        return createEmptyEditorDraft();
+    }
+
+    try {
+        const parsed = JSON.parse(raw) as Partial<EditorDraft>;
+        return {
+            equations: Array.isArray(parsed.equations) ? parsed.equations.map(cloneEquation) : DEFAULT_EQUATIONS,
+            camera: parsed.camera ? cloneCameraState(parsed.camera as CameraState) : DEFAULT_CAMERA_STATE,
+            title: typeof parsed.title === "string" ? parsed.title : "",
+            description: typeof parsed.description === "string" ? parsed.description : "",
+            sceneId: typeof parsed.sceneId === "string" ? parsed.sceneId : null,
+            thumbnailPath: typeof parsed.thumbnailPath === "string" ? parsed.thumbnailPath : null,
+            dirty: typeof parsed.dirty === 'boolean' ? parsed.dirty : false,
+        };
+    } catch {
+        return createEmptyEditorDraft();
+    }
+}
+
+function writeEditorDraft(draft: EditorDraft): void {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    window.localStorage.setItem(EDITOR_DRAFT_STORAGE_KEY, JSON.stringify(draft));
 }
 
 function toNumber(value: unknown) {
@@ -555,7 +628,7 @@ function GraphScene({
             camera={{ position: cameraState.position, fov: cameraState.fov, near: cameraState.near, far: cameraState.far }}
             className="graphing-stage__canvas"
             dpr={[1, 2]}
-            gl={{ antialias: true, alpha: true }}
+            gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
             onCreated={({ camera, gl, scene }) => {
                 scene.up.set(0, 0, 1);
                 const perspectiveCamera = camera as THREE.PerspectiveCamera;
@@ -938,10 +1011,21 @@ function useUndoableState<T>(initialValue: T) {
 }
 
 const GraphingCalculator3DContent = forwardRef<GraphSceneHandle, {}>(function GraphingCalculator3DContent(_props, ref) {
-    const equationsState = useUndoableState<GraphEquation[]>(DEFAULT_EQUATIONS);
-    const [cameraState, setCameraState] = useState<CameraState>(DEFAULT_CAMERA_STATE);
+    const initialDraft = readEditorDraft();
+    const equationsState = useUndoableState<GraphEquation[]>(initialDraft.equations);
+    const [cameraState, setCameraState] = useState<CameraState>(initialDraft.camera);
     const cameraSnapshotRef = useRef<CameraState>(DEFAULT_CAMERA_STATE);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const authSession = useAuthSession();
+    const [saveTitle, setSaveTitle] = useState(initialDraft.title);
+    const [saveDescription, setSaveDescription] = useState(initialDraft.description);
+    const [loadedSceneId, setLoadedSceneId] = useState<string | null>(initialDraft.sceneId);
+    const [isSavingScene, setIsSavingScene] = useState(false);
+    const [lastSavedThumbnail, setLastSavedThumbnail] = useState<string | null>(initialDraft.thumbnailPath);
+    const [sceneToasts, setSceneToasts] = useState<SceneToast[]>([]);
+    const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
+    const [isSceneDirty, setIsSceneDirty] = useState(initialDraft.dirty);
+    const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
 
     const equations = equationsState.value;
 
@@ -967,37 +1051,172 @@ const GraphingCalculator3DContent = forwardRef<GraphSceneHandle, {}>(function Gr
 
     const addEquation = (type: GraphEquationType) => {
         equationsState.setValue((current) => [createEquation(type), ...current]);
+        setIsSceneDirty(true);
     };
 
     const deleteEquation = (id: string) => {
         equationsState.setValue((current) => current.filter((equation) => equation.id !== id));
+        setIsSceneDirty(true);
     };
 
-    const loadScene = (snapshot: GraphSceneSnapshot) => {
+    const captureThumbnailDataUrl = async () => {
+        const canvas = canvasRef.current;
+
+        if (!canvas) {
+            return null;
+        }
+
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+
+        try {
+            const dataUrl = canvas.toDataURL("image/png");
+            return dataUrl.length > 1000 ? dataUrl : null;
+        } catch {
+            return null;
+        }
+    };
+
+    const handleSceneSave = async () => {
+        if (!authSession.currentUser) {
+            pushToast("error", "Sign in required", "You need to sign in before saving scenes.");
+            return;
+        }
+
+        setIsSavingScene(true);
+
+        try {
+            const snapshot = createSceneSnapshot(equations, cameraSnapshotRef.current ?? cameraState);
+            const payload: SaveScenePayload = {
+                title: saveTitle.trim() || "Untitled scene",
+                description: saveDescription.trim() || null,
+                sceneJson: JSON.stringify(snapshot),
+                cameraJson: JSON.stringify(snapshot.camera),
+                visibility: 0,
+                thumbnailDataUrl: await captureThumbnailDataUrl(),
+            };
+
+            let response: SceneSaveResponse;
+
+            try {
+                response = loadedSceneId
+                    ? await updateScene(loadedSceneId, payload, authSession.accessToken ?? undefined)
+                    : await saveScene(payload, authSession.accessToken ?? undefined);
+            } catch (error) {
+                if (error instanceof SceneRequestError && error.status === 404 && loadedSceneId) {
+                    clearPersistedSceneContext(loadedSceneId);
+                    setLoadedSceneId(null);
+                    pushToast('info', 'Scene replaced', 'The saved scene no longer existed, so a new one will be created.');
+                    response = await saveScene(payload, authSession.accessToken ?? undefined);
+                } else {
+                    throw error;
+                }
+            }
+
+            const nextSceneId = response.id || loadedSceneId;
+            setLoadedSceneId(nextSceneId);
+            setLastSavedThumbnail(response.thumbnailPath ?? (payload.thumbnailDataUrl ?? lastSavedThumbnail));
+            setSaveTitle(response.title ?? payload.title);
+            setSaveDescription(response.description ?? payload.description ?? "");
+            setIsSceneDirty(false);
+            pushToast("success", loadedSceneId ? "Scene updated" : "Scene saved", response.title ?? payload.title);
+        } catch (error) {
+            pushToast("error", "Save failed", error instanceof Error ? error.message : "Unable to save the scene.");
+        } finally {
+            setIsSavingScene(false);
+        }
+    };
+
+    function pushToast(tone: SceneToast["tone"], title: string, message: string) {
+        const id = globalThis.crypto?.randomUUID?.() ?? `toast-${Math.random().toString(36).slice(2, 10)}`;
+        setSceneToasts((current) => [...current, { id, tone, title, message }]);
+
+        window.setTimeout(() => {
+            setSceneToasts((current) => current.filter((toast) => toast.id !== id));
+        }, 4200);
+    }
+
+    useEffect(() => {
+        writeEditorDraft({
+            equations,
+            camera: cameraSnapshotRef.current,
+            title: saveTitle,
+            description: saveDescription,
+            sceneId: loadedSceneId,
+            thumbnailPath: lastSavedThumbnail,
+            dirty: isSceneDirty,
+        });
+    }, [equations, saveDescription, saveTitle, loadedSceneId, lastSavedThumbnail, cameraState, isSceneDirty]);
+
+    const loadScene = (snapshot: GraphSceneSnapshot, metadata?: SceneLoadMetadata) => {
         const nextSnapshot = normalizeSceneSnapshot(snapshot);
         equationsState.reset(nextSnapshot.equations);
         cameraSnapshotRef.current = nextSnapshot.camera;
         setCameraState(nextSnapshot.camera);
+        setIsMetadataExpanded(true);
+        setSaveTitle((current) => metadata?.title ?? current);
+        setSaveDescription((current) => metadata?.description ?? current);
+        setLoadedSceneId((current) => metadata?.sceneId ?? current);
+        setLastSavedThumbnail((current) => metadata?.thumbnailPath ?? current);
+        setIsSceneDirty(false);
+        pushToast("info", "Scene loaded", metadata?.title ?? "The scene is ready to edit.");
     };
 
     useImperativeHandle(ref, () => ({
         captureScene: () => createSceneSnapshot(equations, cameraSnapshotRef.current),
         loadScene,
         captureThumbnail: async (size = {}) => {
-            const canvas = canvasRef.current;
+            const dataUrl = await captureThumbnailDataUrl();
 
-            if (!canvas) {
+            if (!dataUrl) {
                 throw new Error("Graph canvas is not ready yet.");
             }
 
             return {
                 mimeType: "image/png",
-                dataUrl: canvas.toDataURL("image/png"),
-                width: size.width ?? canvas.width,
-                height: size.height ?? canvas.height,
+                dataUrl,
+                width: size.width ?? canvasRef.current?.width ?? 0,
+                height: size.height ?? canvasRef.current?.height ?? 0,
             };
         },
-    }), [equations]);
+    }), [equations, lastSavedThumbnail, loadedSceneId, saveDescription, saveTitle, pushToast]);
+
+    useEffect(() => {
+        if (authSession.isRestoring || authSession.currentUser) {
+            return;
+        }
+
+        if (loadedSceneId || lastSavedThumbnail || isSceneDirty) {
+            setLoadedSceneId(null);
+            setLastSavedThumbnail(null);
+            setIsSceneDirty(false);
+        }
+
+        clearPersistedSceneContext();
+    }, [authSession.currentUser, authSession.isRestoring, isSceneDirty, lastSavedThumbnail, loadedSceneId]);
+
+    const clearScene = () => {
+        equationsState.reset(DEFAULT_EQUATIONS);
+        cameraSnapshotRef.current = DEFAULT_CAMERA_STATE;
+        setCameraState(DEFAULT_CAMERA_STATE);
+        setSaveTitle('');
+        setSaveDescription('');
+        setLoadedSceneId(null);
+        setLastSavedThumbnail(null);
+        setIsMetadataExpanded(false);
+        setIsSceneDirty(false);
+        clearPersistedSceneContext();
+        pushToast('info', 'Scene cleared', 'The editor is now blank.');
+    };
+
+    const requestClearScene = () => {
+        if (isSceneDirty) {
+            setIsClearConfirmOpen(true);
+            return;
+        }
+
+        clearScene();
+    };
 
     return (
         <div className="graphing-shell">
@@ -1019,12 +1238,96 @@ const GraphingCalculator3DContent = forwardRef<GraphSceneHandle, {}>(function Gr
                             Add parametric
                         </button>
                     </div>
+                    <section className="graphing-scene-panel">
+                        <button
+                            className="graphing-scene-panel__summary"
+                            type="button"
+                            onClick={() => setIsMetadataExpanded((current) => !current)}
+                        >
+                            <div>
+                                <p className="graphing-scene-form__kicker">Scene metadata</p>
+                                <h3 className="graphing-scene-form__title">{saveTitle.trim() || 'Untitled draft'}</h3>
+                                <p className="graphing-scene-panel__summary-copy">
+                                    {loadedSceneId ? 'Editing a saved scene' : 'Draft only'}{saveDescription.trim() ? ` · ${saveDescription.trim()}` : ''}
+                                </p>
+                            </div>
+                            <div className="graphing-scene-panel__summary-actions">
+                                <span className="graphing-scene-form__status">{loadedSceneId ? 'Saved scene' : 'Draft'}</span>
+                                <span className="graphing-scene-panel__chevron" aria-hidden="true">{isMetadataExpanded ? '▾' : '▸'}</span>
+                            </div>
+                        </button>
+                        {isMetadataExpanded && (
+                            <div className="graphing-scene-form">
+                                <div className="graphing-scene-form__header">
+                                    <div>
+                                        <p className="graphing-scene-form__kicker">Scene metadata</p>
+                                        <h3 className="graphing-scene-form__title">{loadedSceneId ? 'Update this scene' : 'Save a new scene'}</h3>
+                                    </div>
+                                    <span className="graphing-scene-form__status">{loadedSceneId ? 'Editing existing scene' : 'Draft only'}</span>
+                                </div>
+                                <label className="graphing-scene-field">
+                                    <span>Scene name</span>
+                                    <input
+                                        placeholder="Scene title"
+                                        value={saveTitle}
+                                        onChange={(e) => {
+                                            setSaveTitle(e.target.value);
+                                            setIsSceneDirty(true);
+                                        }}
+                                    />
+                                </label>
+                                <label className="graphing-scene-field">
+                                    <span>Description</span>
+                                    <textarea
+                                        placeholder="Add a short description for this scene"
+                                        value={saveDescription}
+                                        onChange={(e) => {
+                                            setSaveDescription(e.target.value);
+                                            setIsSceneDirty(true);
+                                        }}
+                                        rows={3}
+                                    />
+                                </label>
+                                <div className="graphing-scene-actions">
+                                    <button className="graphing-button" type="button" disabled={!authSession.currentUser || isSavingScene} onClick={handleSceneSave}>
+                                        {authSession.currentUser ? (isSavingScene ? 'Saving...' : loadedSceneId ? 'Update scene' : 'Save scene') : 'Sign in to save'}
+                                    </button>
+                                    <button className="graphing-button graphing-button--ghost" type="button" disabled={!loadedSceneId || isSavingScene} onClick={() => {
+                                        setLoadedSceneId(null);
+                                        setIsSceneDirty(true);
+                                        pushToast('info', 'Switched to draft', 'This scene is now a new local draft.');
+                                    }}>
+                                        Save as new
+                                    </button>
+                                </div>
+                                {lastSavedThumbnail && (
+                                    <div className="graphing-scene-preview">
+                                        <div className="graphing-scene-preview__label">Last saved thumbnail</div>
+                                        <img src={lastSavedThumbnail} alt="Last saved scene thumbnail" />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </section>
+                    {sceneToasts.length > 0 && (
+                        <div className="graphing-scene-toasts" aria-live="polite">
+                            {sceneToasts.map((toast) => (
+                                <div key={toast.id} className={`graphing-scene-toast graphing-scene-toast--${toast.tone}`}>
+                                    <strong>{toast.title}</strong>
+                                    <span>{toast.message}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     <div className="graphing-actions graphing-actions--history">
                         <button className="graphing-button graphing-button--ghost" type="button" onClick={equationsState.undo} disabled={!equationsState.canUndo}>
                             Undo
                         </button>
                         <button className="graphing-button graphing-button--ghost" type="button" onClick={equationsState.redo} disabled={!equationsState.canRedo}>
                             Redo
+                        </button>
+                        <button className="graphing-button graphing-button--ghost" type="button" onClick={requestClearScene}>
+                            Clear scene
                         </button>
                     </div>
                 </header>
@@ -1042,6 +1345,7 @@ const GraphingCalculator3DContent = forwardRef<GraphSceneHandle, {}>(function Gr
                     cameraState={cameraState}
                     onCameraStateChange={(nextCamera) => {
                         cameraSnapshotRef.current = nextCamera;
+                        setIsSceneDirty(true);
                     }}
                     onCanvasReady={(canvas) => {
                         canvasRef.current = canvas;
@@ -1058,6 +1362,24 @@ const GraphingCalculator3DContent = forwardRef<GraphSceneHandle, {}>(function Gr
                     </div>
                 </div>
             </main>
+            {isClearConfirmOpen && (
+                <div className="scene-modal-backdrop" role="presentation" onClick={() => setIsClearConfirmOpen(false)}>
+                    <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="clear-scene-title" onClick={(event) => event.stopPropagation()}>
+                        <p className="scene-kicker">Discard changes</p>
+                        <h3 id="clear-scene-title">Clear the current scene?</h3>
+                        <p>There are unsaved changes in the editor. Clearing will remove the current graph setup and start a blank scene.</p>
+                        <div className="scene-modal__actions">
+                            <button className="scene-button scene-button--secondary" type="button" onClick={() => setIsClearConfirmOpen(false)}>Cancel</button>
+                            <button className="scene-button scene-button--danger" type="button" onClick={() => {
+                                setIsClearConfirmOpen(false);
+                                clearScene();
+                            }}>
+                                Clear scene
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 });

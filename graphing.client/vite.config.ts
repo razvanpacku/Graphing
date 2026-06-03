@@ -54,6 +54,12 @@ export default defineConfig({
                 ws: true,
                 changeOrigin: true
             },
+            '/uploads': {
+                target,
+                secure: false,
+                ws: true,
+                changeOrigin: true
+            },
             '/public': {
                 target,
                 secure: false,

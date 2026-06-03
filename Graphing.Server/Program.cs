@@ -1,6 +1,7 @@
 ﻿
 using Graphing.Server.Data;
 using Graphing.Server.Models;
+using Graphing.Server.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -29,8 +30,7 @@ namespace Graphing.Server
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
             }).AddJwtBearer(options =>
             {
-                options.TokenValidationParameters = new
-                TokenValidationParameters
+                options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
                     ValidateAudience = true,
@@ -40,15 +40,46 @@ namespace Graphing.Server
                     ValidAudience = builder.Configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
                 };
+
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = context =>
                     {
                         var accessToken = context.Request.Query["access_token"];
+                        if (!string.IsNullOrWhiteSpace(accessToken))
+                        {
+                            context.Token = accessToken;
+                        }
+
                         return Task.CompletedTask;
+                    },
+                    OnTokenValidated = async context =>
+                    {
+                        var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+                        var user = await userManager.GetUserAsync(context.Principal!);
+
+                        if (user is null || user.isBanned)
+                        {
+                            context.Fail("This account is banned.");
+                        }
                     }
                 };
             });
+
+            builder.Services.Configure<IdentityOptions>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.Password.RequiredLength = 8;
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequireNonAlphanumeric = true;
+                options.SignIn.RequireConfirmedAccount = false;
+            });
+
+            builder.Services.AddScoped<JwtTokenService>();
+            builder.Services.AddScoped<SceneThumbnailStorageService>();
+
             builder.Services.AddSwaggerGen(option =>
             {
                 option.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
