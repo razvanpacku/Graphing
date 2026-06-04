@@ -127,7 +127,15 @@ export default function Feed() {
             {posts.length > 0 && (
                 <div className="scene-list">
                     {posts.map((p) => (
-                        <FeedCard key={p.id} post={p} accessToken={accessToken ?? undefined} />
+                        <FeedCard
+                            key={p.id}
+                            post={p}
+                            accessToken={accessToken ?? undefined}
+                            isAdmin={currentUser?.isAdmin}
+                            onRefresh={() => {
+                                void load(1);
+                            }}
+                        />
                     ))}
                 </div>
             )}

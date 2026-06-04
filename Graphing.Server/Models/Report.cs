@@ -9,6 +9,7 @@ namespace Graphing.Server.Models
         public ApplicationUser ReporterUser { get; set; } = null!;
         public ReportTargetType TargetType { get; set; }
         public string TargetId { get; set; } = string.Empty;
+        public Guid? TargetPostId { get; set; }
         public string ReasonCode { get; set; } = string.Empty;
         public string Details { get; set; } = string.Empty;
         public ReportStatus Status { get; set; } = ReportStatus.Open;

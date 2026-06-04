@@ -1222,10 +1222,10 @@ const GraphingCalculator3DContent = forwardRef<GraphSceneHandle, {}>(function Gr
         <div className="graphing-shell">
             <aside className="graphing-sidebar">
                 <header className="graphing-sidebar__header">
-                    <p className="graphing-kicker">Client-side 3D graph lab</p>
+                    <p className="graphing-kicker">3D Graphing Studio</p>
                     <h1 className="graphing-sidebar__title">Graphing Calculator</h1>
                     <p className="graphing-sidebar__subtitle">
-                        Build explicit, implicit, and parametric 3D surfaces with orbit controls, zoom-aware grid scaling, and a Phong-lit viewport.
+                        Create and explore explicit, implicit, and parametric 3D surfaces with intuitive orbit controls, zoom-aware grid scaling, and a lit viewport. Save and share scenes as snapshots.
                     </p>
                     <div className="graphing-actions">
                         <button className="graphing-button" type="button" onClick={() => addEquation("explicit")}>
@@ -1352,10 +1352,6 @@ const GraphingCalculator3DContent = forwardRef<GraphSceneHandle, {}>(function Gr
                     }}
                 />
                 <div className="graphing-overlay">
-                    <div className="graphing-overlay__card">
-                        <strong>Next step</strong>
-                        Scene snapshots already include equations and camera state, so backend save/load can stay thin.
-                    </div>
                     <div className="graphing-overlay__card">
                         <strong>Controls</strong>
                         Orbit to rotate, drag to pan, and scroll to zoom the full 3D scene.

@@ -2,11 +2,15 @@ export type PostSummary = {
     id: string;
     title?: string | null;
     authorName?: string | null;
+    authorUserId: string;
+    authorIsBanned?: boolean;
     description?: string | null;
     thumbnailPath?: string | null;
     liked?: boolean;
     likeCount?: number;
     commentCount?: number;
+    canReport?: boolean;
+    canBanAuthor?: boolean;
     createdAt: string;
 };
 
@@ -20,10 +24,14 @@ export type PostDetail = {
     title?: string | null;
     body?: string | null;
     authorName?: string | null;
+    authorUserId: string;
+    authorIsBanned?: boolean;
     thumbnailPath?: string | null;
     canDelete?: boolean;
+    canReport?: boolean;
+    canBanAuthor?: boolean;
     createdAt: string;
-    comments?: Array<{ id: string; authorName?: string; body?: string; createdAt: string; canDelete?: boolean }>;
+    comments?: Array<{ id: string; authorName?: string; authorUserId: string; authorIsBanned?: boolean; body?: string; createdAt: string; canDelete?: boolean; canReport?: boolean; canBanAuthor?: boolean }>;
     liked?: boolean;
     likeCount?: number;
 };
@@ -110,5 +118,23 @@ export async function deletePost(id: string, accessToken?: string): Promise<void
 
 export async function deleteComment(postId: string, commentId: string, accessToken?: string): Promise<void> {
     const res = await fetch(`/api/posts/${postId}/comments/${commentId}`, { method: 'DELETE', headers: jsonHeaders(accessToken) });
+    if (!res.ok) throw new Error(await res.text() || res.statusText);
+}
+
+export async function reportPost(id: string, reasonCode: string, details: string, accessToken?: string): Promise<void> {
+    const res = await fetch(`/api/posts/${id}/report`, {
+        method: 'POST',
+        headers: jsonHeaders(accessToken),
+        body: JSON.stringify({ reasonCode, details })
+    });
+    if (!res.ok) throw new Error(await res.text() || res.statusText);
+}
+
+export async function reportComment(postId: string, commentId: string, reasonCode: string, details: string, accessToken?: string): Promise<void> {
+    const res = await fetch(`/api/posts/${postId}/comments/${commentId}/report`, {
+        method: 'POST',
+        headers: jsonHeaders(accessToken),
+        body: JSON.stringify({ reasonCode, details })
+    });
     if (!res.ok) throw new Error(await res.text() || res.statusText);
 }

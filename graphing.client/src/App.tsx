@@ -10,6 +10,8 @@ import SavedScenes from '../Pages/SavedScenes';
 import Feed from '../Pages/Feed';
 import PostDetail from '../Pages/PostDetail';
 import AdminPanel from '../Pages/AdminPanel';
+import AdminReports from '../Pages/AdminReports';
+import AdminBans from '../Pages/AdminBans';
 import SceneDetail from '../Pages/SceneDetail';
 import { useAuthSession } from './features/auth';
 import type { AuthErrorResponse } from './features/auth';
@@ -165,6 +167,8 @@ function App() {
                         <Route path="/scenes/:id" element={<SceneDetail />} />
                         <Route path="/posts/:id" element={<PostDetail />} />
                         <Route path="/admin" element={<AdminPanel />} />
+                        <Route path="/admin/reports" element={<AdminReports />} />
+                        <Route path="/admin/bans" element={<AdminBans />} />
                     </Routes>
                 </main>
                 <AuthMenu

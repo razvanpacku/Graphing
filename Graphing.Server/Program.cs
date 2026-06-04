@@ -135,14 +135,9 @@ namespace Graphing.Server
                 var dbFactory = services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
                 using var db = dbFactory.CreateDbContext();
 
-                // FIRST: Apply migrations to create tables
-                if (app.Environment.IsDevelopment() ||
-                    Environment.GetEnvironmentVariable("APPLY_MIGRATIONS")?.ToLower() == "true")
-                {
-                    Console.WriteLine("Applying database migrations...");
-                    db.Database.Migrate();
-                    Console.WriteLine("Migrations applied successfully.");
-                }
+                Console.WriteLine("Applying database migrations...");
+                db.Database.Migrate();
+                Console.WriteLine("Migrations applied successfully.");
 
                 // SECOND: Seed data based on environment
                 var environmentName = app.Environment.EnvironmentName;

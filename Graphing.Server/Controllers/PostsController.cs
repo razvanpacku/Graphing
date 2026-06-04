@@ -28,12 +28,16 @@ namespace Graphing.Server.Controllers
             public string Id { get; set; } = string.Empty;
             public string? Title { get; set; }
             public string? AuthorName { get; set; }
+            public string AuthorUserId { get; set; } = string.Empty;
+            public bool AuthorIsBanned { get; set; }
             public string? Description { get; set; }
             public string? ThumbnailPath { get; set; }
             public bool Liked { get; set; }
             public int LikeCount { get; set; }
             public int CommentCount { get; set; }
             public DateTime CreatedAt { get; set; }
+            public bool CanReport { get; set; }
+            public bool CanBanAuthor { get; set; }
         }
 
         public class PostDetailDto
@@ -42,9 +46,13 @@ namespace Graphing.Server.Controllers
             public string? Title { get; set; }
             public string? Body { get; set; }
             public string? AuthorName { get; set; }
+            public string AuthorUserId { get; set; } = string.Empty;
+            public bool AuthorIsBanned { get; set; }
             public string? ThumbnailPath { get; set; }
             public DateTime CreatedAt { get; set; }
             public bool CanDelete { get; set; }
+            public bool CanReport { get; set; }
+            public bool CanBanAuthor { get; set; }
             public CommentDto[] Comments { get; set; } = Array.Empty<CommentDto>();
             public bool Liked { get; set; }
             public int LikeCount { get; set; }
@@ -53,10 +61,20 @@ namespace Graphing.Server.Controllers
             {
                 public string Id { get; set; } = string.Empty;
                 public string? AuthorName { get; set; }
+                public string AuthorUserId { get; set; } = string.Empty;
+                public bool AuthorIsBanned { get; set; }
                 public string? Body { get; set; }
                 public DateTime CreatedAt { get; set; }
                 public bool CanDelete { get; set; }
+                public bool CanReport { get; set; }
+                public bool CanBanAuthor { get; set; }
             }
+        }
+
+        public class ReportRequest
+        {
+            public string ReasonCode { get; set; } = string.Empty;
+            public string? Details { get; set; }
         }
 
         public class PagedResult<T>
@@ -95,6 +113,14 @@ namespace Graphing.Server.Controllers
                 .Include(p => p.Likes)
                 .AsQueryable();
 
+            var user = await _users.GetUserAsync(User);
+            var isAdmin = user != null && await _users.IsInRoleAsync(user, "Admin");
+
+            if (!isAdmin)
+            {
+                query = query.Where(p => !p.AuthorUser.isBanned);
+            }
+
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var term = search.Trim();
@@ -112,7 +138,6 @@ namespace Graphing.Server.Controllers
                 _ => DateTime.MinValue
             };
 
-            var user = await _users.GetUserAsync(User);
             var userId = user?.Id;
 
             var total = await query.CountAsync();
@@ -129,12 +154,16 @@ namespace Graphing.Server.Controllers
                     Id = p.Id.ToString(),
                     Title = p.Title,
                     AuthorName = p.AuthorUser.Name,
+                    AuthorUserId = p.AuthorUserId,
+                    AuthorIsBanned = p.AuthorUser.isBanned,
                     Description = p.Description,
                     ThumbnailPath = p.ThumbnailPath,
                     Liked = userId != null && p.Likes.Any(l => l.UserId == userId),
                     LikeCount = p.LikeCount,
                     CommentCount = p.CommentCount,
-                    CreatedAt = p.CreatedAtUtc
+                    CreatedAt = p.CreatedAtUtc,
+                    CanReport = user != null && !isAdmin && p.AuthorUserId != user.Id && !p.AuthorUser.isBanned,
+                    CanBanAuthor = isAdmin && user != null && p.AuthorUserId != user.Id
                 })
                 .ToArrayAsync();
 
@@ -158,25 +187,42 @@ namespace Graphing.Server.Controllers
             var userId = user?.Id;
             var isAdmin = user != null && await _users.IsInRoleAsync(user, "Admin");
 
+            if (!isAdmin && post.AuthorUser.isBanned)
+            {
+                return NotFound();
+            }
+
             var detail = new PostDetailDto
             {
                 Id = post.Id.ToString(),
                 Title = post.Title,
                 Body = post.Description,
                 AuthorName = post.AuthorUser.Name,
+                AuthorUserId = post.AuthorUserId,
+                AuthorIsBanned = post.AuthorUser.isBanned,
                 ThumbnailPath = post.ThumbnailPath,
                 CreatedAt = post.CreatedAtUtc,
                 CanDelete = user != null && (post.AuthorUserId == user.Id || isAdmin),
+                CanReport = user != null && !isAdmin && post.AuthorUserId != user.Id && !post.AuthorUser.isBanned,
+                CanBanAuthor = isAdmin && user != null && post.AuthorUserId != user.Id,
                 LikeCount = post.LikeCount,
                 Liked = userId != null && post.Likes.Any(l => l.UserId == userId),
-                Comments = post.Comments.OrderBy(c => c.CreatedAtUtc).Select(c => new PostDetailDto.CommentDto
-                {
-                    Id = c.Id.ToString(),
-                    AuthorName = c.AuthorUser?.Name,
-                    Body = c.Body,
-                    CreatedAt = c.CreatedAtUtc,
-                    CanDelete = user != null && (c.AuthorUserId == user.Id || isAdmin)
-                }).ToArray()
+                Comments = post.Comments
+                    .Where(c => isAdmin || (c.AuthorUser != null && !c.AuthorUser.isBanned))
+                    .OrderBy(c => c.CreatedAtUtc)
+                    .Select(c => new PostDetailDto.CommentDto
+                    {
+                        Id = c.Id.ToString(),
+                        AuthorName = c.AuthorUser?.Name,
+                        AuthorUserId = c.AuthorUserId,
+                        AuthorIsBanned = c.AuthorUser != null && c.AuthorUser.isBanned,
+                        Body = c.Body,
+                        CreatedAt = c.CreatedAtUtc,
+                        CanDelete = user != null && (c.AuthorUserId == user.Id || isAdmin),
+                        CanReport = user != null && !isAdmin && c.AuthorUserId != user.Id && c.AuthorUser != null && !c.AuthorUser.isBanned,
+                        CanBanAuthor = isAdmin && user != null && c.AuthorUserId != user.Id
+                    })
+                    .ToArray()
             };
 
             return Ok(detail);
@@ -274,6 +320,115 @@ namespace Graphing.Server.Controllers
             public string Body { get; set; } = string.Empty;
         }
 
+        private static string NormalizeReasonCode(string? value)
+        {
+            var reasonCode = value?.Trim();
+            return string.IsNullOrWhiteSpace(reasonCode) ? "other" : reasonCode;
+        }
+
+        private static string NormalizeDetails(string? value)
+        {
+            var details = value?.Trim();
+            if (string.IsNullOrWhiteSpace(details))
+            {
+                return "No additional details provided.";
+            }
+
+            return details.Length <= 4000 ? details : details.Substring(0, 4000);
+        }
+
+        [Authorize]
+        [HttpPost("{id}/report")]
+        public async Task<ActionResult> ReportPost(string id, [FromBody] ReportRequest req)
+        {
+            if (!Guid.TryParse(id, out var postId)) return NotFound();
+
+            var reporter = await _users.GetUserAsync(User);
+            if (reporter == null) return Unauthorized();
+
+            var isAdmin = await _users.IsInRoleAsync(reporter, "Admin");
+            var post = await _db.Posts.Include(p => p.AuthorUser).FirstOrDefaultAsync(p => p.Id == postId);
+            if (post == null) return NotFound();
+            if (!isAdmin && post.AuthorUser.isBanned) return NotFound();
+            if (post.AuthorUserId == reporter.Id) return BadRequest("You cannot report your own post.");
+
+            var targetId = post.Id.ToString();
+            var alreadyOpen = await _db.Reports.AnyAsync(r =>
+                r.ReporterUserId == reporter.Id &&
+                r.TargetType == ReportTargetType.Post &&
+                r.TargetId == targetId &&
+                r.Status == ReportStatus.Open);
+
+            if (alreadyOpen)
+            {
+                return Conflict("You already have an open report for this post.");
+            }
+
+            _db.Reports.Add(new Report
+            {
+                Id = Guid.NewGuid(),
+                ReporterUserId = reporter.Id,
+                TargetType = ReportTargetType.Post,
+                TargetId = targetId,
+                TargetPostId = post.Id,
+                ReasonCode = NormalizeReasonCode(req?.ReasonCode),
+                Details = NormalizeDetails(req?.Details),
+                Status = ReportStatus.Open,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        [Authorize]
+        [HttpPost("{postId}/comments/{commentId}/report")]
+        public async Task<ActionResult> ReportComment(string postId, string commentId, [FromBody] ReportRequest req)
+        {
+            if (!Guid.TryParse(postId, out var postGuid)) return NotFound();
+            if (!Guid.TryParse(commentId, out var commentGuid)) return NotFound();
+
+            var reporter = await _users.GetUserAsync(User);
+            if (reporter == null) return Unauthorized();
+
+            var isAdmin = await _users.IsInRoleAsync(reporter, "Admin");
+            var comment = await _db.Comments
+                .Include(c => c.AuthorUser)
+                .FirstOrDefaultAsync(c => c.Id == commentGuid && c.PostId == postGuid);
+
+            if (comment == null) return NotFound();
+            if (!isAdmin && comment.AuthorUser.isBanned) return NotFound();
+            if (comment.AuthorUserId == reporter.Id) return BadRequest("You cannot report your own comment.");
+
+            var targetId = comment.Id.ToString();
+            var alreadyOpen = await _db.Reports.AnyAsync(r =>
+                r.ReporterUserId == reporter.Id &&
+                r.TargetType == ReportTargetType.Comment &&
+                r.TargetId == targetId &&
+                r.Status == ReportStatus.Open);
+
+            if (alreadyOpen)
+            {
+                return Conflict("You already have an open report for this comment.");
+            }
+
+            _db.Reports.Add(new Report
+            {
+                Id = Guid.NewGuid(),
+                ReporterUserId = reporter.Id,
+                TargetType = ReportTargetType.Comment,
+                TargetId = targetId,
+                TargetPostId = comment.PostId,
+                ReasonCode = NormalizeReasonCode(req?.ReasonCode),
+                Details = NormalizeDetails(req?.Details),
+                Status = ReportStatus.Open,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+
         private async Task<bool> CanDeletePostAsync(ApplicationUser user, Post post)
         {
             return post.AuthorUserId == user.Id || await _users.IsInRoleAsync(user, "Admin");
@@ -292,8 +447,14 @@ namespace Graphing.Server.Controllers
             var user = await _users.GetUserAsync(User);
             if (user == null) return Unauthorized();
 
-            var post = await _db.Posts.Include(p => p.Likes).FirstOrDefaultAsync(p => p.Id == gid);
+            var isAdmin = await _users.IsInRoleAsync(user, "Admin");
+
+            var post = await _db.Posts
+                .Include(p => p.AuthorUser)
+                .Include(p => p.Likes)
+                .FirstOrDefaultAsync(p => p.Id == gid);
             if (post == null) return NotFound();
+            if (!isAdmin && post.AuthorUser.isBanned) return NotFound();
 
             var existing = post.Likes.FirstOrDefault(l => l.UserId == user.Id);
             if (existing != null)
@@ -321,8 +482,11 @@ namespace Graphing.Server.Controllers
             var user = await _users.GetUserAsync(User);
             if (user == null) return Unauthorized();
 
-            var post = await _db.Posts.FirstOrDefaultAsync(p => p.Id == gid);
+            var isAdmin = await _users.IsInRoleAsync(user, "Admin");
+
+            var post = await _db.Posts.Include(p => p.AuthorUser).FirstOrDefaultAsync(p => p.Id == gid);
             if (post == null) return NotFound();
+            if (!isAdmin && post.AuthorUser.isBanned) return NotFound();
 
             var comment = new Comment
             {

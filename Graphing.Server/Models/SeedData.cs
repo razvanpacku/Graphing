@@ -97,7 +97,7 @@ namespace Graphing.Server.Models
                             NormalizedUserName = "BANNED@TEST.COM",
                             PasswordHash = hasher.HashPassword(null!, "User1!"),
                             Name = "Banned",
-                            isBanned = true
+                            //isBanned = true
                         },
                         new ApplicationUser
 

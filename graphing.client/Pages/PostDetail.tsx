@@ -3,8 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuthSession } from '../src/features/auth';
 import SignedOutState from '../src/Components/SignedOutState';
 import { resolveSceneAssetUrl } from '../src/features/scenes/sceneAssetUrl';
-import { fetchPost, likePost, addComment, deletePost, deleteComment } from '../src/features/posts/postsApi';
+import { fetchPost, likePost, addComment, deletePost, deleteComment, reportPost, reportComment } from '../src/features/posts/postsApi';
 import type { PostDetail as PostDetailType } from '../src/features/posts/postsApi';
+import { banUser, unbanUser } from '../src/features/moderation/moderationApi';
 
 type ToastTone = 'success' | 'error' | 'info';
 
@@ -19,6 +20,14 @@ type DeleteTarget =
     | { kind: 'post'; id: string; label: string }
     | { kind: 'comment'; id: string; label: string };
 
+type ModerationTarget = {
+    kind: 'post' | 'comment';
+    action: 'report' | 'ban' | 'unban';
+    targetId: string;
+    userId: string;
+    label: string;
+};
+
 export default function PostDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -29,6 +38,10 @@ export default function PostDetail() {
     const [commentBody, setCommentBody] = useState('');
     const [toasts, setToasts] = useState<Toast[]>([]);
     const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+    const [moderationTarget, setModerationTarget] = useState<ModerationTarget | null>(null);
+    const [moderationReason, setModerationReason] = useState('abuse');
+    const [moderationDetails, setModerationDetails] = useState('');
+    const [moderationBusy, setModerationBusy] = useState(false);
 
     const pushToast = (tone: ToastTone, title: string, message: string) => {
         const toastId = globalThis.crypto?.randomUUID?.() ?? `toast-${Math.random().toString(36).slice(2, 10)}`;
@@ -131,6 +144,7 @@ export default function PostDetail() {
                             <div>
                                 <div className="post-detail__meta">
                                     <span><strong>{post.authorName ?? 'Unknown'}</strong></span>
+                                    {post.authorIsBanned ? <span className="moderation-pill">BANNED</span> : null}
                                     <span>{new Date(post.createdAt).toLocaleString()}</span>
                                 </div>
                             </div>
@@ -138,6 +152,37 @@ export default function PostDetail() {
                                 <button className={`btn-like ${post.liked ? 'liked' : ''}`} onClick={onLike} disabled={!currentUser}>
                                     {post.liked ? 'Unlike' : 'Like'}
                                 </button>
+                                {currentUser?.isAdmin ? (
+                                    post.canBanAuthor ? (
+                                        post.authorIsBanned ? (
+                                            <button
+                                                className="scene-button scene-button--secondary"
+                                                type="button"
+                                                onClick={() => setModerationTarget({ kind: 'post', action: 'unban', targetId: post.id, userId: post.authorUserId, label: post.authorName ?? 'User' })}
+                                            >
+                                                Unban user
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="scene-button scene-button--danger"
+                                                type="button"
+                                                onClick={() => setModerationTarget({ kind: 'post', action: 'ban', targetId: post.id, userId: post.authorUserId, label: post.authorName ?? 'User' })}
+                                            >
+                                                Ban user
+                                            </button>
+                                        )
+                                    ) : null
+                                ) : (
+                                    post.canReport ? (
+                                        <button
+                                            className="scene-button scene-button--secondary"
+                                            type="button"
+                                            onClick={() => setModerationTarget({ kind: 'post', action: 'report', targetId: post.id, userId: post.authorUserId, label: post.title ?? `Post ${post.id}` })}
+                                        >
+                                            Report
+                                        </button>
+                                    ) : null
+                                )}
                                 <Link className="scene-button scene-button--secondary" to={`/?loadPostId=${encodeURIComponent(post.id)}&fork=1`}>
                                     Open scene
                                 </Link>
@@ -171,9 +216,43 @@ export default function PostDetail() {
                                 {post.comments.map((c) => (
                                     <div key={c.id} className="post-detail__comment">
                                         <div className="post-detail__comment-meta">
-                                            <strong>{c.authorName ?? 'Anon'}</strong>
+                                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                <strong>{c.authorName ?? 'Anon'}</strong>
+                                                {c.authorIsBanned ? <span className="moderation-pill">BANNED</span> : null}
+                                            </div>
                                             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                                                 <span>{new Date(c.createdAt).toLocaleString()}</span>
+                                                {currentUser?.isAdmin ? (
+                                                    c.canBanAuthor ? (
+                                                        c.authorIsBanned ? (
+                                                            <button
+                                                                className="scene-button scene-button--secondary"
+                                                                type="button"
+                                                                onClick={() => setModerationTarget({ kind: 'comment', action: 'unban', targetId: c.id, userId: c.authorUserId, label: c.authorName ?? 'User' })}
+                                                            >
+                                                                Unban
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                className="scene-button scene-button--danger"
+                                                                type="button"
+                                                                onClick={() => setModerationTarget({ kind: 'comment', action: 'ban', targetId: c.id, userId: c.authorUserId, label: c.authorName ?? 'User' })}
+                                                            >
+                                                                Ban
+                                                            </button>
+                                                        )
+                                                    ) : null
+                                                ) : (
+                                                    c.canReport ? (
+                                                        <button
+                                                            className="scene-button scene-button--secondary"
+                                                            type="button"
+                                                            onClick={() => setModerationTarget({ kind: 'comment', action: 'report', targetId: c.id, userId: c.authorUserId, label: c.body ?? 'Comment' })}
+                                                        >
+                                                            Report
+                                                        </button>
+                                                    ) : null
+                                                )}
                                                 {c.canDelete ? (
                                                     <button
                                                         className="scene-button scene-button--danger"
@@ -248,6 +327,111 @@ export default function PostDetail() {
                                 }}
                             >
                                 Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {moderationTarget ? (
+                <div className="scene-modal-backdrop" role="presentation" onClick={() => setModerationTarget(null)}>
+                    <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="moderation-title" onClick={(event) => event.stopPropagation()}>
+                        <p className="scene-kicker">Moderation</p>
+                        <h3 id="moderation-title">
+                            {moderationTarget.action === 'report'
+                                ? `Report ${moderationTarget.kind}`
+                                : moderationTarget.action === 'ban'
+                                    ? 'Ban user'
+                                    : 'Unban user'}
+                        </h3>
+                        <p>{moderationTarget.label}</p>
+
+                        {moderationTarget.action === 'report' ? (
+                            <>
+                                <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
+                                    <span>Reason</span>
+                                    <select value={moderationReason} onChange={(event) => setModerationReason(event.target.value)}>
+                                        <option value="abuse">Abuse</option>
+                                        <option value="spam">Spam</option>
+                                        <option value="harassment">Harassment</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </label>
+                                <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
+                                    <span>Details</span>
+                                    <textarea className="post-detail__textarea" value={moderationDetails} onChange={(event) => setModerationDetails(event.target.value)} placeholder="What happened?" />
+                                </label>
+                            </>
+                        ) : (
+                            <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
+                                <span>{moderationTarget.action === 'ban' ? 'Ban reason' : 'Unban note (optional)'}</span>
+                                <textarea className="post-detail__textarea" value={moderationDetails} onChange={(event) => setModerationDetails(event.target.value)} placeholder={moderationTarget.action === 'ban' ? 'Reason for ban' : 'Reason for unban'} />
+                            </label>
+                        )}
+
+                        <div className="scene-modal__actions">
+                            <button
+                                className="scene-button scene-button--secondary"
+                                type="button"
+                                onClick={() => setModerationTarget(null)}
+                                disabled={moderationBusy}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className={moderationTarget.action === 'ban' ? 'scene-button scene-button--danger' : 'scene-button'}
+                                type="button"
+                                disabled={moderationBusy}
+                                onClick={async () => {
+                                    if (!post) return;
+
+                                    setModerationBusy(true);
+                                    try {
+                                        if (moderationTarget.action === 'report') {
+                                            if (moderationTarget.kind === 'post') {
+                                                await reportPost(post.id, moderationReason, moderationDetails, accessToken ?? undefined);
+                                            } else {
+                                                    await reportComment(post.id, moderationTarget.targetId, moderationReason, moderationDetails, accessToken ?? undefined);
+                                            }
+                                        } else if (moderationTarget.action === 'ban') {
+                                            await banUser(moderationTarget.userId, moderationDetails || 'Violation of community rules', accessToken ?? undefined);
+                                        } else {
+                                            await unbanUser(moderationTarget.userId, accessToken ?? undefined, moderationDetails || undefined);
+                                        }
+
+                                        const refreshed = await fetchPost(post.id, accessToken ?? undefined);
+                                        setPost(refreshed);
+
+                                        pushToast(
+                                            'success',
+                                            moderationTarget.action === 'report'
+                                                ? 'Report submitted'
+                                                : moderationTarget.action === 'ban'
+                                                    ? 'User banned'
+                                                    : 'User unbanned',
+                                            moderationTarget.action === 'report'
+                                                ? 'Your report was sent to moderators.'
+                                                : moderationTarget.action === 'ban'
+                                                    ? 'The user has been banned.'
+                                                    : 'The user has been unbanned.'
+                                        );
+
+                                        setModerationTarget(null);
+                                        setModerationDetails('');
+                                    } catch (e: any) {
+                                        const message = e?.message || 'Unable to complete moderation action';
+                                        setError(message);
+                                        pushToast('error', 'Moderation failed', message);
+                                    } finally {
+                                        setModerationBusy(false);
+                                    }
+                                }}
+                            >
+                                {moderationTarget.action === 'report'
+                                    ? 'Submit report'
+                                    : moderationTarget.action === 'ban'
+                                        ? 'Ban user'
+                                        : 'Unban user'}
                             </button>
                         </div>
                     </div>

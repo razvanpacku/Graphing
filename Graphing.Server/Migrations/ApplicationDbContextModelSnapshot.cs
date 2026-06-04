@@ -426,6 +426,9 @@ namespace Graphing.Server.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("TargetPostId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("TargetType")
                         .HasColumnType("INTEGER");
 
