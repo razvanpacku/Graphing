@@ -47,11 +47,10 @@ export default function FeedCard({ post, accessToken, isAdmin, onLike, onRefresh
             setToast(nextLiked ? 'Liked' : 'Unliked');
             onLike?.(post.id);
         } catch (err) {
-            console.warn('like failed', err);
             // revert
             setLiked(!nextLiked);
             setCount((c) => (nextLiked ? Math.max(0, c - 1) : c + 1));
-            setToast('Unable to update like');
+            setToast('Unable to update like. Please try again.');
         } finally {
             setLiking(false);
         }
@@ -185,8 +184,7 @@ export default function FeedCard({ post, accessToken, isAdmin, onLike, onRefresh
                                         setDetails('');
                                         onRefresh?.();
                                     } catch (err) {
-                                        console.warn('moderation action failed', err);
-                                        setToast('Unable to complete moderation action');
+                                        setToast('Unable to complete moderation action. Please try again.');
                                     } finally {
                                         setModBusy(false);
                                     }

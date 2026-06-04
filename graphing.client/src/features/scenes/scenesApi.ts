@@ -15,8 +15,8 @@ export type SceneDetail = {
     visibility: number;
     canEdit: boolean;
     thumbnailPath?: string | null;
-    sceneJson: any;
-    cameraJson: any;
+    sceneJson: string;
+    cameraJson: string;
     createdAt: string;
     updatedAt: string;
     versions?: Array<{ id: string; versionNumber: number; createdAt: string }>;

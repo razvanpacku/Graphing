@@ -25,10 +25,7 @@ function Home() {
                     ? await fetchPostScene(loadPostId, accessToken ?? undefined)
                     : await fetchScene(loadSceneId!, accessToken ?? undefined);
 
-                let snapshot = payload.sceneJson;
-                if (typeof snapshot === 'string') {
-                    snapshot = JSON.parse(snapshot);
-                }
+                const snapshot = JSON.parse(payload.sceneJson) as Parameters<GraphSceneHandle['loadScene']>[0];
                 ref.current?.loadScene(snapshot, {
                     title: payload.title ?? '',
                     description: payload.description ?? '',

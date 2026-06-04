@@ -40,8 +40,8 @@ export default function PublishModal({
             // navigate to new post
             navigate(`/posts/${res.id}`);
             onClose();
-        } catch (err: any) {
-            setError(err?.message || 'Publish failed');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Publish failed');
         } finally {
             setSubmitting(false);
         }

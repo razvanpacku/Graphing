@@ -50,6 +50,10 @@ type SurfaceMetrics = {
     implicitResolution: number;
 };
 
+type CompiledExpression = {
+    evaluate: (scope: Record<string, number>) => unknown;
+};
+
 type CameraState = {
     position: [number, number, number];
     target: [number, number, number];
@@ -300,18 +304,18 @@ function describeError(error: unknown) {
 function compileEquation(equation: GraphEquation) {
     try {
         if (equation.type === "explicit") {
-            return { kind: "ok" as const, compiled: compile(equation.expression) };
+            return { kind: "ok" as const, compiled: compile(equation.expression) as CompiledExpression };
         }
 
         if (equation.type === "implicit") {
-            return { kind: "ok" as const, compiled: compile(equation.expression) };
+            return { kind: "ok" as const, compiled: compile(equation.expression) as CompiledExpression };
         }
 
         return {
             kind: "ok" as const,
-            compiledX: compile(equation.xExpression),
-            compiledY: compile(equation.yExpression),
-            compiledZ: compile(equation.zExpression),
+            compiledX: compile(equation.xExpression) as CompiledExpression,
+            compiledY: compile(equation.yExpression) as CompiledExpression,
+            compiledZ: compile(equation.zExpression) as CompiledExpression,
         };
     } catch (error) {
         return { kind: "error" as const, message: describeError(error) };
@@ -381,7 +385,7 @@ function surfaceToPositions(geometry: THREE.BufferGeometry) {
     return geometry.getAttribute("position") as THREE.BufferAttribute;
 }
 
-function buildExplicitGeometry(expression: any, metrics: SurfaceMetrics) {
+function buildExplicitGeometry(expression: CompiledExpression, metrics: SurfaceMetrics) {
     const geometry = makeSurfaceGeometry(metrics.resolution, metrics.extent);
     const positions = surfaceToPositions(geometry);
     const vertex = new THREE.Vector3();
@@ -401,7 +405,7 @@ function buildExplicitGeometry(expression: any, metrics: SurfaceMetrics) {
     return geometry;
 }
 
-function buildParametricGeometry(compiledX: any, compiledY: any, compiledZ: any, equation: ParametricEquation, metrics: SurfaceMetrics) {
+function buildParametricGeometry(compiledX: CompiledExpression, compiledY: CompiledExpression, compiledZ: CompiledExpression, equation: ParametricEquation, metrics: SurfaceMetrics) {
     const geometry = makeSurfaceGeometry(metrics.resolution, metrics.extent);
     const positions = surfaceToPositions(geometry);
     const vertex = new THREE.Vector3();
@@ -431,7 +435,7 @@ function buildParametricGeometry(compiledX: any, compiledY: any, compiledZ: any,
     return geometry;
 }
 
-function buildImplicitGeometry(expression: any, metrics: SurfaceMetrics) {
+function buildImplicitGeometry(expression: CompiledExpression, metrics: SurfaceMetrics) {
     const extent = metrics.extent;
     const resolution = metrics.implicitResolution;
     const bounds: [[number, number, number], [number, number, number]] = [
@@ -731,14 +735,20 @@ function SurfaceLayer({ equation, metrics }: { equation: GraphEquation; metrics:
         }
 
         if (equation.type === "explicit") {
-            return buildExplicitGeometry(compilation.compiled, metrics);
+            return buildExplicitGeometry(compilation.compiled as CompiledExpression, metrics);
         }
 
         if (equation.type === "implicit") {
-            return buildImplicitGeometry(compilation.compiled, metrics);
+            return buildImplicitGeometry(compilation.compiled as CompiledExpression, metrics);
         }
 
-        return buildParametricGeometry(compilation.compiledX, compilation.compiledY, compilation.compiledZ, equation, metrics);
+        return buildParametricGeometry(
+            compilation.compiledX as CompiledExpression,
+            compilation.compiledY as CompiledExpression,
+            compilation.compiledZ as CompiledExpression,
+            equation,
+            metrics,
+        );
     }, [compilation, equation, metrics]);
 
     useEffect(() => {

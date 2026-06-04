@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthSession } from '../src/features/auth';
-import { fetchScene } from '../src/features/scenes/scenesApi';
+import { fetchScene, type SceneDetail as SceneDetailDto } from '../src/features/scenes/scenesApi';
 import { resolveSceneAssetUrl } from '../src/features/scenes/sceneAssetUrl';
 import PublishModal from '../src/features/posts/PublishModal';
 import SignedOutState from '../src/Components/SignedOutState';
@@ -10,7 +10,7 @@ export default function SceneDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { accessToken, isRestoring, currentUser } = useAuthSession();
-    const [scene, setScene] = useState<any | null>(null);
+    const [scene, setScene] = useState<SceneDetailDto | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [publishOpen, setPublishOpen] = useState(false);
@@ -97,7 +97,14 @@ export default function SceneDetail() {
                     </div>
                 </div>
             )}
-            <PublishModal open={publishOpen} onClose={() => setPublishOpen(false)} sceneVersionId={scene?.versions && scene.versions.length > 0 ? scene.versions.reduce((a: any, b: any) => (a.versionNumber > b.versionNumber ? a : b)).id : null} initialTitle={scene?.title} initialDescription={scene?.description} thumbnailPath={scene?.thumbnailPath} />
+            <PublishModal
+                open={publishOpen}
+                onClose={() => setPublishOpen(false)}
+                sceneVersionId={scene?.versions && scene.versions.length > 0 ? scene.versions.reduce((latest, version) => (latest.versionNumber > version.versionNumber ? latest : version)).id : null}
+                initialTitle={scene?.title}
+                initialDescription={scene?.description}
+                thumbnailPath={scene?.thumbnailPath}
+            />
         </section>
     );
 }
