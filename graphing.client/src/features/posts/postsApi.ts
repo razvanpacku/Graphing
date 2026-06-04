@@ -1,19 +1,43 @@
 export type PostSummary = {
-    id: number;
+    id: string;
     title?: string | null;
     authorName?: string | null;
+    description?: string | null;
+    thumbnailPath?: string | null;
+    liked?: boolean;
+    likeCount?: number;
+    commentCount?: number;
     createdAt: string;
 };
 
+export type PagedResult<T> = {
+    items: T[];
+    total: number;
+};
+
 export type PostDetail = {
-    id: number;
+    id: string;
     title?: string | null;
     body?: string | null;
     authorName?: string | null;
+    thumbnailPath?: string | null;
+    canDelete?: boolean;
     createdAt: string;
-    comments?: Array<{ id: number; authorName?: string; body?: string; createdAt: string }>;
+    comments?: Array<{ id: string; authorName?: string; body?: string; createdAt: string; canDelete?: boolean }>;
     liked?: boolean;
     likeCount?: number;
+};
+
+export type PostScene = {
+    postId: string;
+    sceneVersionId: string;
+    sceneId: string;
+    title: string;
+    description?: string | null;
+    sceneJson: string;
+    cameraJson: string;
+    thumbnailPath?: string | null;
+    createdAt: string;
 };
 
 const jsonHeaders = (accessToken?: string) => ({
@@ -21,28 +45,70 @@ const jsonHeaders = (accessToken?: string) => ({
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
 });
 
-export async function fetchPosts(): Promise<PostSummary[]> {
-    const res = await fetch('/api/posts');
+export async function fetchPosts(page = 1, pageSize = 20, accessToken?: string, options?: { search?: string; sort?: 'newest' | 'popular'; window?: 'all' | 'month' | 'week' | 'day' }): Promise<PagedResult<PostSummary>> {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (options?.search) params.set('search', options.search);
+    if (options?.sort) params.set('sort', options.sort === 'popular' ? 'Popular' : 'Newest');
+    if (options?.window) {
+        const mappedWindow = {
+            all: 'AllTime',
+            month: 'Month',
+            week: 'Week',
+            day: 'Day'
+        }[options.window];
+
+        params.set('window', mappedWindow);
+    }
+    const res = await fetch(`/api/posts?${params.toString()}`, { headers: jsonHeaders(accessToken) });
     if (!res.ok) throw new Error(await res.text() || res.statusText);
     return res.json();
 }
 
-export async function fetchPost(id: number, accessToken?: string): Promise<PostDetail> {
+export async function fetchPost(id: string, accessToken?: string): Promise<PostDetail> {
     const res = await fetch(`/api/posts/${id}`, { headers: jsonHeaders(accessToken) });
     if (!res.ok) throw new Error(await res.text() || res.statusText);
     return res.json();
 }
 
-export async function likePost(id: number, accessToken?: string): Promise<void> {
+export async function fetchPostScene(id: string, accessToken?: string): Promise<PostScene> {
+    const res = await fetch(`/api/posts/${id}/scene`, { headers: jsonHeaders(accessToken) });
+    if (!res.ok) throw new Error(await res.text() || res.statusText);
+    return res.json();
+}
+
+export type CreatePostRequest = {
+    sceneVersionId: string;
+    title: string;
+    description?: string | null;
+    thumbnailPath?: string | null;
+};
+
+export async function createPost(req: CreatePostRequest, accessToken?: string): Promise<{ id: string }> {
+    const res = await fetch('/api/posts', { method: 'POST', headers: jsonHeaders(accessToken), body: JSON.stringify(req) });
+    if (!res.ok) throw new Error(await res.text() || res.statusText);
+    return res.json();
+}
+
+export async function likePost(id: string, accessToken?: string): Promise<void> {
     const res = await fetch(`/api/posts/${id}/like`, { method: 'POST', headers: jsonHeaders(accessToken) });
     if (!res.ok) throw new Error(await res.text() || res.statusText);
 }
 
-export async function addComment(id: number, body: string, accessToken?: string): Promise<void> {
+export async function addComment(id: string, body: string, accessToken?: string): Promise<void> {
     const res = await fetch(`/api/posts/${id}/comments`, {
         method: 'POST',
         headers: jsonHeaders(accessToken),
         body: JSON.stringify({ body })
     });
+    if (!res.ok) throw new Error(await res.text() || res.statusText);
+}
+
+export async function deletePost(id: string, accessToken?: string): Promise<void> {
+    const res = await fetch(`/api/posts/${id}`, { method: 'DELETE', headers: jsonHeaders(accessToken) });
+    if (!res.ok) throw new Error(await res.text() || res.statusText);
+}
+
+export async function deleteComment(postId: string, commentId: string, accessToken?: string): Promise<void> {
+    const res = await fetch(`/api/posts/${postId}/comments/${commentId}`, { method: 'DELETE', headers: jsonHeaders(accessToken) });
     if (!res.ok) throw new Error(await res.text() || res.statusText);
 }

@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthSession } from '../src/features/auth';
+import SignedOutState from '../src/Components/SignedOutState';
 import type { SceneSummary, PagedResult } from '../src/features/scenes/scenesApi';
 import { clearPersistedSceneContext, fetchUserScenes, deleteScene } from '../src/features/scenes/scenesApi';
 import { resolveSceneAssetUrl } from '../src/features/scenes/sceneAssetUrl';
-
-const visibilityLabels: Record<number, string> = {
-    0: 'Private',
-    1: 'Unlisted',
-    2: 'Published'
-};
 
 export default function SavedScenes() {
     const { accessToken, isRestoring, currentUser } = useAuthSession();
@@ -47,7 +42,20 @@ export default function SavedScenes() {
     }, [currentUser]);
 
     if (isRestoring) return <div>Restoring session...</div>;
-    if (!currentUser) return <div>Please sign in to view your saved scenes.</div>;
+    if (!currentUser) {
+        return (
+            <section className="scene-page scene-page--wide">
+                <header className="scene-page__header">
+                    <div>
+                        <p className="scene-kicker">Private workspace</p>
+                        <h2 className="scene-title">My Scenes</h2>
+                        <p className="scene-subtitle">Open a scene to inspect it, or delete scenes you no longer need.</p>
+                    </div>
+                </header>
+                <SignedOutState title="You are signed out" description="Sign in again to access your saved scenes and drafts." />
+            </section>
+        );
+    }
 
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -89,7 +97,6 @@ export default function SavedScenes() {
                                     <Link className="scene-card__title" to={`/scenes/${scene.id}`}>
                                         {scene.title ?? `Scene ${scene.id}`}
                                     </Link>
-                                    <span className="scene-badge scene-badge--private">{visibilityLabels[scene.visibility] ?? 'Private'}</span>
                                 </div>
                                 <div className="scene-card__meta">
                                     <span>Created {new Date(scene.createdAt).toLocaleString()}</span>

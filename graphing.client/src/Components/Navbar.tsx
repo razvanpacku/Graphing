@@ -31,7 +31,6 @@ function Navbar({ currentUser, onLogin, onRegister, onLogout }: NavbarProps) {
                 </span>
                 {currentUser ? (
                     <>
-                        <span className="user-chip">{currentUser.name}</span>
                         <button className="nav-button nav-button-secondary" type="button" onClick={onLogout}>
                             Log out
                         </button>
