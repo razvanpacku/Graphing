@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuthSession } from '../src/features/auth';
 import SignedOutState from '../src/Components/SignedOutState';
+import ModalPortal from '../src/Components/ModalPortal';
 import { resolveSceneAssetUrl } from '../src/features/scenes/sceneAssetUrl';
 import { fetchPost, likePost, addComment, deletePost, deleteComment, reportPost, reportComment } from '../src/features/posts/postsApi';
 import type { PostDetail as PostDetailType } from '../src/features/posts/postsApi';
@@ -288,154 +289,158 @@ export default function PostDetail() {
             )}
 
             {deleteTarget ? (
-                <div className="scene-modal-backdrop" role="presentation" onClick={() => setDeleteTarget(null)}>
-                    <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="delete-post-title" onClick={(event) => event.stopPropagation()}>
-                        <p className="scene-kicker">Confirm delete</p>
-                        <h3 id="delete-post-title">
-                            Delete {deleteTarget.kind === 'post' ? 'post' : 'comment'}?
-                        </h3>
-                        <p>{deleteTarget.label}</p>
-                        <div className="scene-modal__actions">
-                            <button className="scene-button scene-button--secondary" type="button" onClick={() => setDeleteTarget(null)}>
-                                Cancel
-                            </button>
-                            <button
-                                className="scene-button scene-button--danger"
-                                type="button"
-                                onClick={async () => {
-                                    const target = deleteTarget;
-                                    setDeleteTarget(null);
+                <ModalPortal>
+                    <div className="scene-modal-backdrop" role="presentation" onClick={() => setDeleteTarget(null)}>
+                        <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="delete-post-title" onClick={(event) => event.stopPropagation()}>
+                            <p className="scene-kicker">Confirm delete</p>
+                            <h3 id="delete-post-title">
+                                Delete {deleteTarget.kind === 'post' ? 'post' : 'comment'}?
+                            </h3>
+                            <p>{deleteTarget.label}</p>
+                            <div className="scene-modal__actions">
+                                <button className="scene-button scene-button--secondary" type="button" onClick={() => setDeleteTarget(null)}>
+                                    Cancel
+                                </button>
+                                <button
+                                    className="scene-button scene-button--danger"
+                                    type="button"
+                                    onClick={async () => {
+                                        const target = deleteTarget;
+                                        setDeleteTarget(null);
 
-                                    if (!post || !target) return;
+                                        if (!post || !target) return;
 
-                                    try {
-                                        if (target.kind === 'post') {
-                                            await deletePost(post.id, accessToken ?? undefined);
-                                            pushToast('success', 'Post deleted', 'The post has been removed.');
-                                            navigate('/feed');
-                                        } else {
-                                            await deleteComment(post.id, target.id, accessToken ?? undefined);
-                                            const refreshed = await fetchPost(post.id, accessToken ?? undefined);
-                                            setPost(refreshed);
-                                            pushToast('success', 'Comment deleted', 'The comment was removed.');
+                                        try {
+                                            if (target.kind === 'post') {
+                                                await deletePost(post.id, accessToken ?? undefined);
+                                                pushToast('success', 'Post deleted', 'The post has been removed.');
+                                                navigate('/feed');
+                                            } else {
+                                                await deleteComment(post.id, target.id, accessToken ?? undefined);
+                                                const refreshed = await fetchPost(post.id, accessToken ?? undefined);
+                                                setPost(refreshed);
+                                                pushToast('success', 'Comment deleted', 'The comment was removed.');
+                                            }
+                                        } catch (e: any) {
+                                            const message = e?.message || 'Unable to delete item';
+                                            setError(message);
+                                            pushToast('error', 'Delete failed', message);
                                         }
-                                    } catch (e: any) {
-                                        const message = e?.message || 'Unable to delete item';
-                                        setError(message);
-                                        pushToast('error', 'Delete failed', message);
-                                    }
-                                }}
-                            >
-                                Delete
-                            </button>
+                                    }}
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </ModalPortal>
             ) : null}
 
             {moderationTarget ? (
-                <div className="scene-modal-backdrop" role="presentation" onClick={() => setModerationTarget(null)}>
-                    <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="moderation-title" onClick={(event) => event.stopPropagation()}>
-                        <p className="scene-kicker">Moderation</p>
-                        <h3 id="moderation-title">
-                            {moderationTarget.action === 'report'
-                                ? `Report ${moderationTarget.kind}`
-                                : moderationTarget.action === 'ban'
-                                    ? 'Ban user'
-                                    : 'Unban user'}
-                        </h3>
-                        <p>{moderationTarget.label}</p>
-
-                        {moderationTarget.action === 'report' ? (
-                            <>
-                                <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
-                                    <span>Reason</span>
-                                    <select value={moderationReason} onChange={(event) => setModerationReason(event.target.value)}>
-                                        <option value="abuse">Abuse</option>
-                                        <option value="spam">Spam</option>
-                                        <option value="harassment">Harassment</option>
-                                        <option value="other">Other</option>
-                                    </select>
-                                </label>
-                                <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
-                                    <span>Details</span>
-                                    <textarea className="post-detail__textarea" value={moderationDetails} onChange={(event) => setModerationDetails(event.target.value)} placeholder="What happened?" />
-                                </label>
-                            </>
-                        ) : (
-                            <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
-                                <span>{moderationTarget.action === 'ban' ? 'Ban reason' : 'Unban note (optional)'}</span>
-                                <textarea className="post-detail__textarea" value={moderationDetails} onChange={(event) => setModerationDetails(event.target.value)} placeholder={moderationTarget.action === 'ban' ? 'Reason for ban' : 'Reason for unban'} />
-                            </label>
-                        )}
-
-                        <div className="scene-modal__actions">
-                            <button
-                                className="scene-button scene-button--secondary"
-                                type="button"
-                                onClick={() => setModerationTarget(null)}
-                                disabled={moderationBusy}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className={moderationTarget.action === 'ban' ? 'scene-button scene-button--danger' : 'scene-button'}
-                                type="button"
-                                disabled={moderationBusy}
-                                onClick={async () => {
-                                    if (!post) return;
-
-                                    setModerationBusy(true);
-                                    try {
-                                        if (moderationTarget.action === 'report') {
-                                            if (moderationTarget.kind === 'post') {
-                                                await reportPost(post.id, moderationReason, moderationDetails, accessToken ?? undefined);
-                                            } else {
-                                                    await reportComment(post.id, moderationTarget.targetId, moderationReason, moderationDetails, accessToken ?? undefined);
-                                            }
-                                        } else if (moderationTarget.action === 'ban') {
-                                            await banUser(moderationTarget.userId, moderationDetails || 'Violation of community rules', accessToken ?? undefined);
-                                        } else {
-                                            await unbanUser(moderationTarget.userId, accessToken ?? undefined, moderationDetails || undefined);
-                                        }
-
-                                        const refreshed = await fetchPost(post.id, accessToken ?? undefined);
-                                        setPost(refreshed);
-
-                                        pushToast(
-                                            'success',
-                                            moderationTarget.action === 'report'
-                                                ? 'Report submitted'
-                                                : moderationTarget.action === 'ban'
-                                                    ? 'User banned'
-                                                    : 'User unbanned',
-                                            moderationTarget.action === 'report'
-                                                ? 'Your report was sent to moderators.'
-                                                : moderationTarget.action === 'ban'
-                                                    ? 'The user has been banned.'
-                                                    : 'The user has been unbanned.'
-                                        );
-
-                                        setModerationTarget(null);
-                                        setModerationDetails('');
-                                    } catch (e: any) {
-                                        const message = e?.message || 'Unable to complete moderation action';
-                                        setError(message);
-                                        pushToast('error', 'Moderation failed', message);
-                                    } finally {
-                                        setModerationBusy(false);
-                                    }
-                                }}
-                            >
+                <ModalPortal>
+                    <div className="scene-modal-backdrop" role="presentation" onClick={() => setModerationTarget(null)}>
+                        <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="moderation-title" onClick={(event) => event.stopPropagation()}>
+                            <p className="scene-kicker">Moderation</p>
+                            <h3 id="moderation-title">
                                 {moderationTarget.action === 'report'
-                                    ? 'Submit report'
+                                    ? `Report ${moderationTarget.kind}`
                                     : moderationTarget.action === 'ban'
                                         ? 'Ban user'
                                         : 'Unban user'}
-                            </button>
+                            </h3>
+                            <p>{moderationTarget.label}</p>
+
+                            {moderationTarget.action === 'report' ? (
+                                <>
+                                    <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
+                                        <span>Reason</span>
+                                        <select value={moderationReason} onChange={(event) => setModerationReason(event.target.value)}>
+                                            <option value="abuse">Abuse</option>
+                                            <option value="spam">Spam</option>
+                                            <option value="harassment">Harassment</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </label>
+                                    <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
+                                        <span>Details</span>
+                                        <textarea className="post-detail__textarea" value={moderationDetails} onChange={(event) => setModerationDetails(event.target.value)} placeholder="What happened?" />
+                                    </label>
+                                </>
+                            ) : (
+                                <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
+                                    <span>{moderationTarget.action === 'ban' ? 'Ban reason' : 'Unban note (optional)'}</span>
+                                    <textarea className="post-detail__textarea" value={moderationDetails} onChange={(event) => setModerationDetails(event.target.value)} placeholder={moderationTarget.action === 'ban' ? 'Reason for ban' : 'Reason for unban'} />
+                                </label>
+                            )}
+
+                            <div className="scene-modal__actions">
+                                <button
+                                    className="scene-button scene-button--secondary"
+                                    type="button"
+                                    onClick={() => setModerationTarget(null)}
+                                    disabled={moderationBusy}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    className={moderationTarget.action === 'ban' ? 'scene-button scene-button--danger' : 'scene-button'}
+                                    type="button"
+                                    disabled={moderationBusy}
+                                    onClick={async () => {
+                                        if (!post) return;
+
+                                        setModerationBusy(true);
+                                        try {
+                                            if (moderationTarget.action === 'report') {
+                                                if (moderationTarget.kind === 'post') {
+                                                    await reportPost(post.id, moderationReason, moderationDetails, accessToken ?? undefined);
+                                                } else {
+                                                    await reportComment(post.id, moderationTarget.targetId, moderationReason, moderationDetails, accessToken ?? undefined);
+                                                }
+                                            } else if (moderationTarget.action === 'ban') {
+                                                await banUser(moderationTarget.userId, moderationDetails || 'Violation of community rules', accessToken ?? undefined);
+                                            } else {
+                                                await unbanUser(moderationTarget.userId, accessToken ?? undefined, moderationDetails || undefined);
+                                            }
+
+                                            const refreshed = await fetchPost(post.id, accessToken ?? undefined);
+                                            setPost(refreshed);
+
+                                            pushToast(
+                                                'success',
+                                                moderationTarget.action === 'report'
+                                                    ? 'Report submitted'
+                                                    : moderationTarget.action === 'ban'
+                                                        ? 'User banned'
+                                                        : 'User unbanned',
+                                                moderationTarget.action === 'report'
+                                                    ? 'Your report was sent to moderators.'
+                                                    : moderationTarget.action === 'ban'
+                                                        ? 'The user has been banned.'
+                                                        : 'The user has been unbanned.'
+                                            );
+
+                                            setModerationTarget(null);
+                                            setModerationDetails('');
+                                        } catch (e: any) {
+                                            const message = e?.message || 'Unable to complete moderation action';
+                                            setError(message);
+                                            pushToast('error', 'Moderation failed', message);
+                                        } finally {
+                                            setModerationBusy(false);
+                                        }
+                                    }}
+                                >
+                                    {moderationTarget.action === 'report'
+                                        ? 'Submit report'
+                                        : moderationTarget.action === 'ban'
+                                            ? 'Ban user'
+                                            : 'Unban user'}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </ModalPortal>
             ) : null}
         </section>
     );

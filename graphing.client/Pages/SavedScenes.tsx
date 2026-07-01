@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthSession } from '../src/features/auth';
 import SignedOutState from '../src/Components/SignedOutState';
+import ModalPortal from '../src/Components/ModalPortal';
 import type { SceneSummary, PagedResult } from '../src/features/scenes/scenesApi';
 import { clearPersistedSceneContext, fetchUserScenes, deleteScene } from '../src/features/scenes/scenesApi';
 import { resolveSceneAssetUrl } from '../src/features/scenes/sceneAssetUrl';
@@ -126,42 +127,44 @@ export default function SavedScenes() {
             </div>
 
             {pendingDelete && (
-                <div className="scene-modal-backdrop" role="presentation" onClick={() => setPendingDelete(null)}>
-                    <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="delete-scene-title" onClick={(event) => event.stopPropagation()}>
-                        <p className="scene-kicker">Confirm delete</p>
-                        <h3 id="delete-scene-title">Delete {pendingDelete.title ?? `Scene ${pendingDelete.id}` }?</h3>
-                        <p>This removes the scene from your library. The saved image and draft data will be deleted too.</p>
-                        <div className="scene-modal__actions">
-                            <button className="scene-button scene-button--secondary" type="button" onClick={() => setPendingDelete(null)}>Cancel</button>
-                            <button
-                                className="scene-button scene-button--danger"
-                                type="button"
-                                onClick={async () => {
-                                    const scene = pendingDelete;
-                                    setPendingDelete(null);
+                    <ModalPortal>
+                        <div className="scene-modal-backdrop" role="presentation" onClick={() => setPendingDelete(null)}>
+                            <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="delete-scene-title" onClick={(event) => event.stopPropagation()}>
+                                <p className="scene-kicker">Confirm delete</p>
+                                <h3 id="delete-scene-title">Delete {pendingDelete.title ?? `Scene ${pendingDelete.id}` }?</h3>
+                                <p>This removes the scene from your library. The saved image and draft data will be deleted too.</p>
+                                <div className="scene-modal__actions">
+                                    <button className="scene-button scene-button--secondary" type="button" onClick={() => setPendingDelete(null)}>Cancel</button>
+                                    <button
+                                        className="scene-button scene-button--danger"
+                                        type="button"
+                                        onClick={async () => {
+                                            const scene = pendingDelete;
+                                            setPendingDelete(null);
 
-                                    try {
-                                        await deleteScene(scene.id, accessToken ?? undefined);
-                                        clearPersistedSceneContext(scene.id);
-                                        setScenes((cur) => {
-                                            const next = cur.filter((entry) => entry.id !== scene.id);
-                                            if (next.length === 0 && page > 1) {
-                                                setPage((currentPage) => Math.max(1, currentPage - 1));
+                                            try {
+                                                await deleteScene(scene.id, accessToken ?? undefined);
+                                                clearPersistedSceneContext(scene.id);
+                                                setScenes((cur) => {
+                                                    const next = cur.filter((entry) => entry.id !== scene.id);
+                                                    if (next.length === 0 && page > 1) {
+                                                        setPage((currentPage) => Math.max(1, currentPage - 1));
+                                                    }
+
+                                                    return next;
+                                                });
+                                                setTotal((count) => Math.max(0, count - 1));
+                                            } catch (e: any) {
+                                                setError(e?.message || 'Unable to delete scene');
                                             }
-
-                                            return next;
-                                        });
-                                        setTotal((count) => Math.max(0, count - 1));
-                                    } catch (e: any) {
-                                        setError(e?.message || 'Unable to delete scene');
-                                    }
-                                }}
-                            >
-                                Delete scene
-                            </button>
+                                        }}
+                                    >
+                                        Delete scene
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                    </ModalPortal>
             )}
         </section>
     );

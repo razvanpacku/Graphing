@@ -6,6 +6,7 @@ import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { compile } from "mathjs";
 import * as isosurface from "isosurface";
+import ModalPortal from '../src/Components/ModalPortal';
 
 import "./GraphingCalculator.css";
 
@@ -1369,22 +1370,24 @@ const GraphingCalculator3DContent = forwardRef<GraphSceneHandle, {}>(function Gr
                 </div>
             </main>
             {isClearConfirmOpen && (
-                <div className="scene-modal-backdrop" role="presentation" onClick={() => setIsClearConfirmOpen(false)}>
-                    <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="clear-scene-title" onClick={(event) => event.stopPropagation()}>
-                        <p className="scene-kicker">Discard changes</p>
-                        <h3 id="clear-scene-title">Clear the current scene?</h3>
-                        <p>There are unsaved changes in the editor. Clearing will remove the current graph setup and start a blank scene.</p>
-                        <div className="scene-modal__actions">
-                            <button className="scene-button scene-button--secondary" type="button" onClick={() => setIsClearConfirmOpen(false)}>Cancel</button>
-                            <button className="scene-button scene-button--danger" type="button" onClick={() => {
-                                setIsClearConfirmOpen(false);
-                                clearScene();
-                            }}>
-                                Clear scene
-                            </button>
+                <ModalPortal>
+                    <div className="scene-modal-backdrop" role="presentation" onClick={() => setIsClearConfirmOpen(false)}>
+                        <div className="scene-modal" role="dialog" aria-modal="true" aria-labelledby="clear-scene-title" onClick={(event) => event.stopPropagation()}>
+                            <p className="scene-kicker">Discard changes</p>
+                            <h3 id="clear-scene-title">Clear the current scene?</h3>
+                            <p>There are unsaved changes in the editor. Clearing will remove the current graph setup and start a blank scene.</p>
+                            <div className="scene-modal__actions">
+                                <button className="scene-button scene-button--secondary" type="button" onClick={() => setIsClearConfirmOpen(false)}>Cancel</button>
+                                <button className="scene-button scene-button--danger" type="button" onClick={() => {
+                                    setIsClearConfirmOpen(false);
+                                    clearScene();
+                                }}>
+                                    Clear scene
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </ModalPortal>
             )}
         </div>
     );

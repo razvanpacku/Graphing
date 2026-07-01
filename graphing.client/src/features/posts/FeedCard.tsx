@@ -4,6 +4,7 @@ import type { PostSummary } from './postsApi';
 import { likePost, reportPost } from './postsApi';
 import { resolveSceneAssetUrl } from '../scenes/sceneAssetUrl';
 import { banUser, unbanUser } from '../moderation/moderationApi';
+import ModalPortal from '../../Components/ModalPortal';
 
 type FeedCardProps = {
     post: PostSummary;
@@ -130,71 +131,73 @@ export default function FeedCard({ post, accessToken, isAdmin, onLike, onRefresh
             </div>
 
             {moderationOpen ? (
-                <div className="scene-modal-backdrop" role="presentation" onClick={(event) => { event.stopPropagation(); setModerationOpen(null); }}>
-                    <div className="scene-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-                        <p className="scene-kicker">Moderation</p>
-                        <h3>
-                            {moderationOpen === 'report' ? 'Report this post' : moderationOpen === 'ban' ? 'Ban this user' : 'Unban this user'}
-                        </h3>
-                        {moderationOpen === 'report' ? (
-                            <>
+                <ModalPortal>
+                    <div className="scene-modal-backdrop" role="presentation" onClick={() => setModerationOpen(null)}>
+                        <div className="scene-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+                            <p className="scene-kicker">Moderation</p>
+                            <h3>
+                                {moderationOpen === 'report' ? 'Report this post' : moderationOpen === 'ban' ? 'Ban this user' : 'Unban this user'}
+                            </h3>
+                            {moderationOpen === 'report' ? (
+                                <>
+                                    <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
+                                        <span>Reason</span>
+                                        <select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
+                                            <option value="abuse">Abuse</option>
+                                            <option value="spam">Spam</option>
+                                            <option value="harassment">Harassment</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </label>
+                                    <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
+                                        <span>Details</span>
+                                        <textarea className="post-detail__textarea" value={details} onChange={(event) => setDetails(event.target.value)} placeholder="What happened?" />
+                                    </label>
+                                </>
+                            ) : (
                                 <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
-                                    <span>Reason</span>
-                                    <select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
-                                        <option value="abuse">Abuse</option>
-                                        <option value="spam">Spam</option>
-                                        <option value="harassment">Harassment</option>
-                                        <option value="other">Other</option>
-                                    </select>
+                                    <span>{moderationOpen === 'ban' ? 'Ban reason' : 'Unban note (optional)'}</span>
+                                    <textarea className="post-detail__textarea" value={details} onChange={(event) => setDetails(event.target.value)} placeholder={moderationOpen === 'ban' ? 'Reason for this ban' : 'Reason for unbanning'} />
                                 </label>
-                                <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
-                                    <span>Details</span>
-                                    <textarea className="post-detail__textarea" value={details} onChange={(event) => setDetails(event.target.value)} placeholder="What happened?" />
-                                </label>
-                            </>
-                        ) : (
-                            <label className="feed-toolbar__field" style={{ marginTop: 10 }}>
-                                <span>{moderationOpen === 'ban' ? 'Ban reason' : 'Unban note (optional)'}</span>
-                                <textarea className="post-detail__textarea" value={details} onChange={(event) => setDetails(event.target.value)} placeholder={moderationOpen === 'ban' ? 'Reason for this ban' : 'Reason for unbanning'} />
-                            </label>
-                        )}
-                        <div className="scene-modal__actions">
-                            <button className="scene-button scene-button--secondary" type="button" onClick={() => setModerationOpen(null)} disabled={modBusy}>
-                                Cancel
-                            </button>
-                            <button
-                                className={moderationOpen === 'ban' ? 'scene-button scene-button--danger' : 'scene-button'}
-                                type="button"
-                                disabled={modBusy}
-                                onClick={async () => {
-                                    setModBusy(true);
-                                    try {
-                                        if (moderationOpen === 'report') {
-                                            await reportPost(post.id, reasonCode, details, accessToken ?? undefined);
-                                            setToast('Report submitted');
-                                        } else if (moderationOpen === 'ban') {
-                                            await banUser(post.authorUserId, details || 'Violation of community rules', accessToken ?? undefined);
-                                            setToast('User banned');
-                                        } else {
-                                            await unbanUser(post.authorUserId, accessToken ?? undefined, details || undefined);
-                                            setToast('User unbanned');
-                                        }
+                            )}
+                            <div className="scene-modal__actions">
+                                <button className="scene-button scene-button--secondary" type="button" onClick={() => setModerationOpen(null)} disabled={modBusy}>
+                                    Cancel
+                                </button>
+                                <button
+                                    className={moderationOpen === 'ban' ? 'scene-button scene-button--danger' : 'scene-button'}
+                                    type="button"
+                                    disabled={modBusy}
+                                    onClick={async () => {
+                                        setModBusy(true);
+                                        try {
+                                            if (moderationOpen === 'report') {
+                                                await reportPost(post.id, reasonCode, details, accessToken ?? undefined);
+                                                setToast('Report submitted');
+                                            } else if (moderationOpen === 'ban') {
+                                                await banUser(post.authorUserId, details || 'Violation of community rules', accessToken ?? undefined);
+                                                setToast('User banned');
+                                            } else {
+                                                await unbanUser(post.authorUserId, accessToken ?? undefined, details || undefined);
+                                                setToast('User unbanned');
+                                            }
 
-                                        setModerationOpen(null);
-                                        setDetails('');
-                                        onRefresh?.();
-                                    } catch (err) {
-                                        setToast('Unable to complete moderation action. Please try again.');
-                                    } finally {
-                                        setModBusy(false);
-                                    }
-                                }}
-                            >
-                                {moderationOpen === 'report' ? 'Submit report' : moderationOpen === 'ban' ? 'Ban user' : 'Unban user'}
-                            </button>
+                                            setModerationOpen(null);
+                                            setDetails('');
+                                            onRefresh?.();
+                                        } catch (err) {
+                                            setToast('Unable to complete moderation action. Please try again.');
+                                        } finally {
+                                            setModBusy(false);
+                                        }
+                                    }}
+                                >
+                                    {moderationOpen === 'report' ? 'Submit report' : moderationOpen === 'ban' ? 'Ban user' : 'Unban user'}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </ModalPortal>
             ) : null}
         </article>
     );
