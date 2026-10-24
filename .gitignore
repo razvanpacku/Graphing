@@ -390,4 +390,6 @@ FodyWeavers.xsd
 Graphing.Server/wwwroot/uploads/scenes/
 
 docs/
-paper/
+paper/*
+!paper/thesis.pdf
+!paper/images
